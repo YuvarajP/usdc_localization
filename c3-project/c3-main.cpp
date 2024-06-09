@@ -226,6 +226,8 @@ int main(){
 
 			// TODO: Find pose transform by using ICP or NDT matching
 			//pose = ....
+			Pose pose = Pose(Point(vehicle->GetTransform().location.x, vehicle->GetTransform().location.y, vehicle->GetTransform().location.z), Rotate(vehicle->GetTransform().rotation.yaw * pi/180, vehicle->GetTransform().rotation.pitch * pi/180, vehicle->GetTransform().rotation.roll * pi/180)) - poseRef;
+
 			pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt;
 			ndt.setTransformationEpsilon(1e-3);
 			ndt.setStepSize(1);
