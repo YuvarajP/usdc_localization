@@ -151,6 +151,7 @@ int main(){
 
 	auto vehicle = boost::static_pointer_cast<cc::Vehicle>(ego_actor);
 	Pose pose(Point(0,0,0), Rotate(0,0,0));
+	Pose pose = Pose(Point(vehicle->GetTransform().location.x, vehicle->GetTransform().location.y, vehicle->GetTransform().location.z), Rotate(vehicle->GetTransform().rotation.yaw * pi/180, vehicle->GetTransform().rotation.pitch * pi/180, vehicle->GetTransform().rotation.roll * pi/180)) - poseRef;
 
 	// Load map
 	PointCloudT::Ptr mapCloud(new PointCloudT);
@@ -226,7 +227,6 @@ int main(){
 
 			// TODO: Find pose transform by using ICP or NDT matching
 			//pose = ....
-			Pose pose = Pose(Point(vehicle->GetTransform().location.x, vehicle->GetTransform().location.y, vehicle->GetTransform().location.z), Rotate(vehicle->GetTransform().rotation.yaw * pi/180, vehicle->GetTransform().rotation.pitch * pi/180, vehicle->GetTransform().rotation.roll * pi/180)) - poseRef;
 
 			pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt;
 			ndt.setTransformationEpsilon(1e-3);
