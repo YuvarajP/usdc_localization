@@ -110,7 +110,8 @@ Eigen::Matrix4d NDT(pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointX
 	ndt.align(*cloud_ndt, init_guess);
 	cout << "Normal Distributions Transform has converged:" << ndt.hasConverged() << " score: " << ndt.getFitnessScore() << " time: " << time.toc() << " ms" << endl;
 	Eigen::Matrix4d transformation_matrix = ndt.getFinalTransformation().cast<double>();
-return transformation_matrix;
+	
+	return transformation_matrix;
 }
 
 int main(){
