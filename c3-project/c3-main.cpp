@@ -99,8 +99,9 @@ void drawCar(Pose pose, int num, Color color, double alpha, pcl::visualization::
 	renderBox(viewer, box, num, color, alpha);
 }
 
-Eigen::Matrix4d NDT(pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt, PointCloudT::Ptr source, Pose startingPose, int iterations)
+Eigen::Matrix4d NDT(pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt, PointCloudT::Ptr mapCloud, PointCloudT::Ptr source, Pose startingPose, int iterations)
 {
+	ndt.setInputTarget(mapCloud);
 	pcl::console::TicToc time;
 	time.tic();
 	Eigen::Matrix4f init_guess = transform3D(startingPose.rotation.yaw, startingPose.rotation.pitch, startingPose.rotation.roll, startingPose.position.x, startingPose.position.y, 	startingPose.position.z).cast<float>();
@@ -231,7 +232,7 @@ int main(){
 			ndt.setResolution(5);
             ndt.setMaximumIterations(100);
 			ndt.setInputTarget(mapCloud);
-			Eigen::Matrix4d pos_transform = NDT(ndt, FilterCloud, pose, 100);
+			Eigen::Matrix4d pos_transform = NDT(ndt, mapCloud, FilterCloud, pose, 100);
 			pose = getPose(pos_transform);
 			// TODO: Transform scan so it aligns with ego's actual pose and render that scan
 			PointCloudT::Ptr corrected(new PointCloudT);
