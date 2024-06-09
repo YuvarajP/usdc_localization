@@ -98,7 +98,19 @@ void drawCar(Pose pose, int num, Color color, double alpha, pcl::visualization::
     box.cube_height = 2;
 	renderBox(viewer, box, num, color, alpha);
 }
-
+Eigen::Matrix4d NDT(pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt, PointCloudT::Ptr source, Pose startingPose, int iterations)
+{
+	pcl::console::TicToc time;
+	time.tic();
+	Eigen::Matrix4f init_guess = transform3D(startingPose.rotation.yaw, startingPose.rotation.pitch, startingPose.rotation.roll, startingPose.position.x, startingPose.position.y, 	startingPose.position.z).cast<float>();
+	ndt.setMaximumIterations(iterations);
+	ndt.setInputSource(source);
+	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_ndt(new pcl::PointCloud<pcl::PointXYZ>);
+	ndt.align(*cloud_ndt, init_guess);
+	cout << "Normal Distributions Transform has converged:" << ndt.hasConverged() << " score: " << ndt.getFitnessScore() << " time: " << time.toc() << " ms" << endl;
+	Eigen::Matrix4d transformation_matrix = ndt.getFinalTransformation().cast<double>();
+return transformation_matrix;
+}
 int main(){
 
 	auto client = cc::Client("localhost", 2000);
@@ -150,8 +162,8 @@ int main(){
 		if(new_scan){
 			auto scan = boost::static_pointer_cast<csd::LidarMeasurement>(data);
 			for (auto detection : *scan){
-				if((detection.x*detection.x + detection.y*detection.y + detection.z*detection.z) > 8.0){
-					pclCloud.points.push_back(PointT(detection.x, detection.y, detection.z));
+				if((detection.point.x*detection.point.x + detection.point.y*detection.point.y + detection.point.z*detection.point.z) > 8.0){ // Don't include points touching ego
+					pclCloud.points.push_back(PointT(detection.point.x, detection.point.y, detection.point.z));
 				}
 			}
 			if(pclCloud.points.size() > 5000){ // CANDO: Can modify this value to get different scan resolutions
@@ -204,13 +216,20 @@ int main(){
 
 			// TODO: Find pose transform by using ICP or NDT matching
 			//pose = ....
-
+pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt;
+			ndt.setTransformationEpsilon(1e-3);
+			ndt.setStepSize(1);
+			ndt.setResolution(5);
+            ndt.setMaximumIterations(100);
+			ndt.setInputTarget(mapCloud);
+			Eigen::Matrix4d pos_transform = NDT(ndt, FilterCloud, pose, 100);
+			pose = getPose(pos_transform);
 			// TODO: Transform scan so it aligns with ego's actual pose and render that scan
-
+PointCloudT::Ptr corrected(new PointCloudT);
+			pcl::transformPointCloud(*FilterCloud, *corrected, pos_transform);
 			viewer->removePointCloud("scan");
 			// TODO: Change `scanCloud` below to your transformed scan
-			renderPointCloud(viewer, scanCloud, "scan", Color(1,0,0) );
-
+			renderPointCloud(viewer, corrected, "scan", Color(1,0,0) );
 			viewer->removeAllShapes();
 			drawCar(pose, 1,  Color(0,1,0), 0.35, viewer);
           
