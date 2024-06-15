@@ -1,4 +1,3 @@
-
 #include <carla/client/Client.h>
 #include <carla/client/ActorBlueprint.h>
 #include <carla/client/BlueprintLibrary.h>
@@ -158,9 +157,11 @@ int main(){
   	cout << "Loaded " << mapCloud->points.size() << " data points from map.pcd" << endl;
 	renderPointCloud(viewer, mapCloud, "map", Color(0,0,1)); 
 
+	typename pcl::PointCloud<PointT>::Ptr cloudFiltered (new pcl::PointCloud<PointT>);
 	typename pcl::PointCloud<PointT>::Ptr scanCloud (new pcl::PointCloud<PointT>);
 
 	lidar->Listen([&new_scan, &lastScanTime, &scanCloud](auto data){
+
 		if(new_scan){
 			auto scan = boost::static_pointer_cast<csd::LidarMeasurement>(data);
 			for (auto detection : *scan){
@@ -224,15 +225,14 @@ int main(){
 
 			// TODO: Find pose transform by using ICP or NDT matching
 			//pose = ....
-			Pose pose = Pose(Point(vehicle->GetTransform().location.x, vehicle->GetTransform().location.y, vehicle->GetTransform().location.z), Rotate(vehicle->GetTransform().rotation.yaw * pi/180, vehicle->GetTransform().rotation.pitch * pi/180, vehicle->GetTransform().rotation.roll * pi/180)) - poseRef;
 
 			pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt;
 			ndt.setTransformationEpsilon(1e-3);
 			ndt.setStepSize(1);
-			ndt.setResolution(5);
-            ndt.setMaximumIterations(60);
+			ndt.setResolution(1);
 			ndt.setInputTarget(mapCloud);
-			Eigen::Matrix4d pos_transform = NDT(ndt, mapCloud, FilterCloud, pose, 60);
+            pose = truePose;
+			Eigen::Matrix4d pos_transform = NDT(ndt, mapCloud, FilterCloud, pose, 5);
 			pose = getPose(pos_transform);
 			// TODO: Transform scan so it aligns with ego's actual pose and render that scan
 			PointCloudT::Ptr corrected(new PointCloudT);
