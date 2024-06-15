@@ -10,9 +10,6 @@
 
 #include <carla/client/Vehicle.h>
 
-//pcl code
-//#include "render/render.h"
-
 namespace cc = carla::client;
 namespace cg = carla::geom;
 namespace csd = carla::sensor::data;
@@ -98,19 +95,39 @@ void drawCar(Pose pose, int num, Color color, double alpha, pcl::visualization::
 	renderBox(viewer, box, num, color, alpha);
 }
 
-Eigen::Matrix4d NDT(pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt, PointCloudT::Ptr mapCloud, PointCloudT::Ptr source, Pose startingPose, int iterations)
+// Normal Distributions Transform (NDT) algorithm to determine a rigid transformation between two large point clouds, both over 100,000 points.
+// The NDT algorithm is a registration algorithm that uses standard optimization techniques applied to  statistical models of 
+//  3D points to determine the most probable registration between two point clouds
+Eigen::Matrix4d NDT(PointCloudT::Ptr mapCloud, PointCloudT::Ptr source, Pose startingPose, int iterations)
 {
-	ndt.setInputTarget(mapCloud);
+	// Initializing Normal Distributions Transform (NDT).
+	pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt;
+	// Setting minimum transformation difference for termination condition.
+	ndt.setTransformationEpsilon(1e-3);
+	// Setting maximum step size for More-Thuente line search.
+	ndt.setStepSize(1);
+	//Setting Resolution of NDT grid structure (VoxelGridCovariance).
+	ndt.setResolution(1);
+	// Setting max number of registration iterations.
+	ndt.setMaximumIterations(iterations);
+	// Setting point cloud to be aligned.
+	ndt.setInputSource(source);
+	// Setting point cloud to be aligned to.
+	ndt.setInputTarget(mapCloud);	
+
 	pcl::console::TicToc time;
 	time.tic();
+
+	// Set initial alignment estimate
 	Eigen::Matrix4f init_guess = transform3D(startingPose.rotation.yaw, startingPose.rotation.pitch, startingPose.rotation.roll, startingPose.position.x, startingPose.position.y, 	startingPose.position.z).cast<float>();
-	ndt.setMaximumIterations(iterations);
-	ndt.setInputSource(source);
 	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_ndt(new pcl::PointCloud<pcl::PointXYZ>);
+	// Calculating required rigid transform to align the input cloud to the target cloud.
 	ndt.align(*cloud_ndt, init_guess);
-	cout << "Normal Distributions Transform has converged:" << ndt.hasConverged() << " score: " << ndt.getFitnessScore() << " time: " << time.toc() << " ms" << endl;
+	// Debug code
+	// cout << "Normal Distributions Transform has converged:" << ndt.hasConverged() << " score: " << ndt.getFitnessScore() << " time: " << time.toc() << " ms" << endl;
+
+	// Return transformation matrix for transforming filtered/unfiltered input cloud using found transform
 	Eigen::Matrix4d transformation_matrix = ndt.getFinalTransformation().cast<double>();
-	
 	return transformation_matrix;
 }
 
@@ -157,7 +174,6 @@ int main(){
   	cout << "Loaded " << mapCloud->points.size() << " data points from map.pcd" << endl;
 	renderPointCloud(viewer, mapCloud, "map", Color(0,0,1)); 
 
-	typename pcl::PointCloud<PointT>::Ptr cloudFiltered (new pcl::PointCloud<PointT>);
 	typename pcl::PointCloud<PointT>::Ptr scanCloud (new pcl::PointCloud<PointT>);
 
 	lidar->Listen([&new_scan, &lastScanTime, &scanCloud](auto data){
@@ -216,6 +232,7 @@ int main(){
 			
 			new_scan = true;
 			// TODO: (Filter scan using voxel filter)
+			// Filter is created with a leaf size of 50cm, the input data is passed, and the output is computed and stored in FilterCloud
           	double resolution = 0.5;
 			pcl::VoxelGrid<PointT> vg;
 			vg.setInputCloud(scanCloud);
@@ -224,19 +241,21 @@ int main(){
 			vg.filter(*FilterCloud);			
 
 			// TODO: Find pose transform by using ICP or NDT matching
-			//pose = ....
-
-			pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt;
-			ndt.setTransformationEpsilon(1e-3);
-			ndt.setStepSize(1);
-			ndt.setResolution(1);
-			ndt.setInputTarget(mapCloud);
+			// current vehicle pose
             pose = truePose;
-			Eigen::Matrix4d pos_transform = NDT(ndt, mapCloud, FilterCloud, pose, 5);
-			pose = getPose(pos_transform);
+			// Target = mapCloud, source = FilterCloud downsampled lidar scan cloud, pose = initial guess pose, 5 = iterations
+			// Though the algorithm can be run without such an initial guess, you tend to get better 
+			// results with one, particularly if there is a large discrepancy between reference frames.
+			Eigen::Matrix4d pos_transform = NDT(mapCloud, FilterCloud, pose, 5);
+			pose = getPose(pos_transform); // used to calculate pose error
 			// TODO: Transform scan so it aligns with ego's actual pose and render that scan
+			
+			// Transforming filtered cloud using found transform.
+			// Immediately after the alignment process, the output cloud will contain a transformed version of the filtered input cloud
+			//  because we passed the algorithm a filtered point cloud, as opposed to the original input cloud. 
 			PointCloudT::Ptr corrected(new PointCloudT);
 			pcl::transformPointCloud(*FilterCloud, *corrected, pos_transform);
+
 			viewer->removePointCloud("scan");
 			// TODO: Change `scanCloud` below to your transformed scan
 			renderPointCloud(viewer, corrected, "scan", Color(1,0,0) );
